@@ -54,7 +54,7 @@ jobs:
             libxcb-shape0-dev \
             libxcb-xfixes0-dev \
             libxkbcommon-dev \
-            libGL1-mesa-dev
+            libgl1-mesa-dev
 
       - name: 🔨 Compilar binario Release optimizado
         run: cargo build --release --target ${{ matrix.target }}
