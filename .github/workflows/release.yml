@@ -1,0 +1,118 @@
+name: Build & Release Multiplataforma (Windows, Linux, macOS)
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Compilar en ${{ matrix.os_name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            os_name: Windows-x86_64
+            target: x86_64-pc-windows-msvc
+          - os: ubuntu-latest
+            os_name: Linux-x86_64
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            os_name: macOS-Universal
+            target: aarch64-apple-darwin
+
+    steps:
+      - name: 📥 Descargar código fuente
+        uses: actions/checkout@v4
+
+      - name: 🦀 Instalar Rust Toolchain estable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: ⚡ Caché de dependencias de Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: 🐧 Instalar dependencias del sistema (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libssl-dev \
+            pkg-config \
+            libgtk-3-dev \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxkbcommon-dev \
+            libGL1-mesa-dev
+
+      - name: 🔨 Compilar binario Release optimizado
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: 📦 Empaquetar para Windows (.exe y .zip)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          Copy-Item "target/${{ matrix.target }}/release/rustman.exe" "dist/rustman-windows-x86_64.exe"
+          Compress-Archive -Path "target/${{ matrix.target }}/release/rustman.exe" -DestinationPath "dist/Rustman-Windows-x86_64.zip"
+
+      - name: 📦 Empaquetar para Linux (.deb y .tar.gz)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/rustman" dist/
+          tar -czvf dist/Rustman-Linux-x86_64.tar.gz -C "target/${{ matrix.target }}/release" rustman
+          cargo install cargo-deb
+          cargo deb --target ${{ matrix.target }} --no-build -o dist/rustman_amd64.deb
+
+      - name: 📦 Empaquetar para macOS (Rustman.app en .zip)
+        if: matrix.os == 'macos-latest'
+        run: |
+          mkdir -p dist
+          mkdir -p "dist/Rustman.app/Contents/MacOS"
+          cp "target/${{ matrix.target }}/release/rustman" "dist/Rustman.app/Contents/MacOS/rustman"
+          cat > "dist/Rustman.app/Contents/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>rustman</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.migdom.rustman</string>
+              <key>CFBundleName</key>
+              <string>Rustman</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>0.1.0</string>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+          cd dist && zip -r Rustman-macOS-App.zip Rustman.app && rm -rf Rustman.app
+
+      - name: 📤 Subir artefactos compilados a GitHub Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rustman-${{ matrix.os_name }}
+          path: dist/*
+
+      - name: 🚀 Publicar en GitHub Releases (cuando se sube un tag v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

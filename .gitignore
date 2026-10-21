@@ -1,0 +1,29 @@
+# Compilación y artefactos de Cargo / Rust
+/target/
+**/*.rs.bk
+*.pdb
+
+# Nota: En aplicaciones binarias de Rust suele versionarse Cargo.lock,
+# descomenta la siguiente línea solo si prefieres ignorarlo:
+# Cargo.lock
+
+# Datos locales o exportaciones temporales
+rustman_data.json
+
+# Entornos de desarrollo / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Archivos del sistema operativo (Windows, macOS, Linux)
+Thumbs.db
+Desktop.ini
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Variables de entorno locales o secretos de prueba
+.env
+.env.local
